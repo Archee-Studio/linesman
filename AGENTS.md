@@ -6,10 +6,9 @@ A benchmark that scores generated 2D drafting sheets (DXF) against the calculati
 
 ```sh
 uv sync
-uv run ruff format --check src tests tools && uv run ruff check src tests tools
+uv run ruff format --check src tests && uv run ruff check src tests
 uv run pytest -q                                   # all tests; one file: uv run pytest -q tests/test_views.py
 uv run linesman calibrate --families all --seeds 5 # every check proven on every family
-uv run python tools/banner.py assets               # regenerate the README banner
 ```
 
 ## Map
