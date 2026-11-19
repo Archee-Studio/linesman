@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use Linesman, please cite it as below."
+title: "Linesman: a benchmark for generated 2D drafting sheets"
+type: software
+authors:
+  - name: "Archee Studio"
+license: Apache-2.0
+repository-code: "https://github.com/Archee-Studio/linesman"
+url: "https://archee.studio/linesman"
+version: "0.1.0"
