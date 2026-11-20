@@ -40,19 +40,19 @@ def deviations(text: str) -> tuple[float, float] | None:
 
 
 def shows(dim: Dim, shown: Dimension) -> bool:
-    """True when the dimension text carries the designation or the limit deviations of `dim.fit`."""
+    """True when the dimension text carries the designation or the limit deviations of `dim.fit`. A `deviations`
+    fit_form asks for the written deviations only: the designation alone does not satisfy it."""
     if not dim.fit:
         return True
     plain = _plain(shown.text)
-    if re.search(rf"(?<![A-Za-z]){re.escape(dim.fit)}(?!\d)", plain):
-        return True
     written = deviations(shown.text)
-    if written is None:
-        return False
     upper, lower = iso286.limits(dim.fit, dim.value)
-    return (
+    right = written is not None and (
         abs(written[0] - upper) <= DEVIATION_TOLERANCE + 1e-9 and abs(written[1] - lower) <= DEVIATION_TOLERANCE + 1e-9
     )
+    if dim.fit_form == "deviations":
+        return right
+    return right or bool(re.search(rf"(?<![A-Za-z]){re.escape(dim.fit)}(?!\d)", plain))
 
 
 def fits(sheet: Sheet, task: Task, truth: Truth) -> list[CheckResult]:

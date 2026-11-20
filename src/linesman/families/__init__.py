@@ -2,6 +2,8 @@
 
 from types import ModuleType
 
-from . import bracket, bushing, flange, gear_blank, plate, shaft
+from . import bracket, bushing, cover, flange, gear_blank, lever, plate, pulley, shaft
 
-FAMILIES: dict[str, ModuleType] = {m.NAME: m for m in (plate, shaft, flange, bushing, gear_blank, bracket)}
+FAMILIES: dict[str, ModuleType] = {
+    m.NAME: m for m in (plate, shaft, flange, bushing, gear_blank, bracket, pulley, lever, cover)
+}

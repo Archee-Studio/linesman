@@ -11,7 +11,7 @@ from linesman.grade import grade
 from linesman.schema import SPEC_VERSION, Task
 from linesman.sheet import load, number, parse
 
-PARTS = ("gate", "views", "dims", "fits", "titleblock")  # every listed part needs a check
+PARTS = ("gate", "views", "dims", "fits", "titleblock", "drafting")  # every listed part needs a check
 
 
 @pytest.mark.parametrize("family", sorted(FAMILIES))
@@ -63,6 +63,9 @@ def test_every_part_has_a_check():
         ("2 × 45°", 2.0),
         ("{\\fArial;%%c25}", 25.0),
         ("", None),
+        ("d - t1 = 30", 30.0),
+        ("Ø25 H8", 25.0),
+        ("⌀25 H8", 25.0),
     ],
 )
 def test_number_reads_dimension_text(text, value):

@@ -1,11 +1,30 @@
 [project]
 name = "linesman-bench"
-version = "0.1.0"
+version = "0.2.2"
 description = "Linesman by Archee Studio: a benchmark for generated 2D drafting sheets"
 readme = "README.md"
 license = "Apache-2.0"
+authors = [{ name = "Archee Studio", email = "team@archee.studio" }]
+keywords = ["benchmark", "cad", "dxf", "drafting", "mechanical-engineering", "llm-evaluation", "agentic-ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
 requires-python = ">=3.12"
 dependencies = ["ezdxf>=1.4,<2", "pydantic>=2.9,<3"]
+
+[project.urls]
+Homepage = "https://archee.studio/linesman/"
+Repository = "https://github.com/Archee-Studio/linesman"
+"Hugging Face" = "https://huggingface.co/datasets/archee-studio/linesman"
+Issues = "https://github.com/Archee-Studio/linesman/issues"
 
 [project.scripts]
 linesman = "linesman.cli:main"

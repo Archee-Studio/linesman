@@ -4,10 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SPEC_VERSION = "0.1.0"
+SPEC_VERSION = "0.2.1"
 
 Track = Literal["calc-sheet", "review"]
-Part = Literal["gate", "views", "dims", "fits", "titleblock", "review"]
+Part = Literal["gate", "views", "dims", "fits", "titleblock", "drafting", "finish", "review"]
 ViewName = Literal["front", "top", "left", "right", "bottom", "rear", "section"]
 DimKind = Literal["linear", "diameter", "radius", "angular"]
 ErrorKind = Literal["wrong-value", "missing-dim", "wrong-fit", "missing-view", "wrong-title-field"]
@@ -23,6 +23,7 @@ class Task(Frozen):
     family: str
     seed: int
     spec: str = SPEC_VERSION
+    level: Literal["given", "calc"] = "given"  # calc tasks give requirements, not finished values
 
 
 class View(Frozen):
@@ -31,6 +32,8 @@ class View(Frozen):
     name: ViewName
     width: float
     height: float
+    hidden: bool = False  # the view holds features shown with hidden (dashed) lines
+    hatch_area: float | None = None  # section views: true mm2 of cut material the hatch must cover
 
 
 class Dim(Frozen):
@@ -41,6 +44,7 @@ class Dim(Frozen):
     value: float
     view: ViewName
     fit: str | None = None
+    fit_form: Literal["any", "deviations"] = "any"  # "deviations" requires limit deviations, not a designation
     alt: tuple[float, ...] = ()  # other values that locate the same feature equally (pitch or edge distance)
 
 
@@ -59,6 +63,7 @@ class Truth(Frozen):
     dims: tuple[Dim, ...]
     title: dict[str, str] = Field(default_factory=dict)
     scale: str = "1:1"
+    finish: dict[str, float] = Field(default_factory=dict)  # dim id -> required Ra in micrometres
     errors: tuple[SeededError, ...] = ()
 
 

@@ -44,7 +44,7 @@ def test_sheet_matches_truth(family, seed, layout, tmp_path):
     assert shown == sorted(round(d.value, 3) for d in truth.dims)
     texts = {t.text for t in sheet.texts}
     assert set(truth.title.values()) <= texts
-    assert truth.scale == "1:1" and truth.title["scale"] == truth.scale
+    assert truth.scale in ("1:1", "1:2", "2:1") and truth.title["scale"] == truth.scale
 
 
 @pytest.mark.parametrize("family", sorted(FAMILIES))
@@ -55,9 +55,10 @@ def test_views_fit_apart_and_hold_the_geometry(family, seed, layout):
     inputs = fam.sample(seed)
     truth = fam.truth(inputs)
     boxes = fam.views(inputs, layout)
+    factor = {"1:1": 1.0, "1:2": 0.5, "2:1": 2.0}[truth.scale]
     assert {v.name for v in truth.views} == set(boxes)
     for v in truth.views:
-        assert boxes[v.name][2:] == pytest.approx((v.width, v.height))
+        assert boxes[v.name][2:] == pytest.approx((v.width * factor, v.height * factor))
     _boxes_in_area_and_apart(boxes)
     # every outline, hidden and centre entity lies inside one view and the views are exactly filled
     drawn = {name: [] for name in boxes}
@@ -117,6 +118,41 @@ def test_gear_blank_tip_diameter_follows_the_calculation(seed):
 
 
 def test_every_family_is_listed():
-    assert set(FAMILIES) == {"plate", "shaft", "flange", "bushing", "gear-blank", "bracket"}
+    assert set(FAMILIES) == {
+        "plate",
+        "shaft",
+        "flange",
+        "bushing",
+        "gear-blank",
+        "bracket",
+        "pulley",
+        "lever",
+        "cover",
+    }
     sheet = parse(FAMILIES["shaft"].draw(FAMILIES["shaft"].sample(0)))
     assert {d.kind for d in sheet.dims} == {"diameter", "linear"}
+
+
+@pytest.mark.parametrize("family", sorted(FAMILIES))
+def test_calc_level_sheets_pass(family):
+    """A reference drawn from calc-level inputs grades clean at level calc."""
+    fam = FAMILIES[family]
+    inputs = fam.calc(0)
+    truth = fam.truth(inputs)
+    sheet = parse(fam.draw(inputs, 0))
+    result = grade(sheet, Task(id="t-calc", track="calc-sheet", family=family, seed=0, level="calc"), truth)
+    assert result.passed, [c for c in result.checks if not c.passed]
+
+
+def test_seeds_0_to_19_cover_the_scales():
+    """Every family with room to shrink or grow leaves 1:1 inside seeds 0-19; both directions occur."""
+    seen = set()
+    for name in sorted(FAMILIES):
+        fam = FAMILIES[name]
+        scales = {fam.truth(fam.sample(s)).scale for s in range(20)} | {fam.truth(fam.calc(s)).scale for s in range(20)}
+        seen |= scales
+        largest = {max(v.width, v.height) for s in range(20) for v in fam.truth(fam.sample(s)).views}
+        smallest = {min(v.width, v.height) for s in range(20) for v in fam.truth(fam.sample(s)).views}
+        if max(largest) > 277.0 or min(smallest) < 40.0:
+            assert scales - {"1:1"}, f"{name} never leaves 1:1 though its sizes allow it"
+    assert {"1:2", "2:1"} <= seen

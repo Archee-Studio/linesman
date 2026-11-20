@@ -38,7 +38,21 @@ def _first(name: str):
 
 
 def test_registry_rows_are_complete():
-    assert set(MUTANTS) == {"wrong-value", "missing-dim", "wrong-fit", "wrong-title-field", "missing-view"}
+    assert set(MUTANTS) == {
+        "wrong-value",
+        "missing-dim",
+        "wrong-fit",
+        "wrong-title-field",
+        "missing-view",
+        "lying-text",
+        "detached-dim",
+        "off-sheet",
+        "tiny-text",
+        "overlap-text",
+        "solid-hidden",
+        "missing-hatch",
+        "wrong-roughness",
+    }
     for name, mutant in MUTANTS.items():
         assert callable(mutant.run) and callable(mutant.witness), name
 
@@ -132,6 +146,17 @@ def test_seed_errors_plants_one_to_three_distinct_errors(seed):
 
 
 def test_targets_are_known_check_ids():
-    known = {"dims.recall", "fits.shown", "titleblock.fields", "views.present"}
-    for name in set(MUTANTS) - {"missing-view"}:
+    known = {
+        "dims.recall",
+        "fits.shown",
+        "titleblock.fields",
+        "views.present",
+        "dims.true",
+        "dims.attached",
+        "drafting.on_sheet",
+        "drafting.text",
+        "drafting.clear",
+        "drafting.linetypes",
+    }
+    for name in set(MUTANTS) - {"missing-view", "off-sheet", "missing-hatch", "wrong-roughness"}:
         assert set(_first(name)[3].targets) <= known, name

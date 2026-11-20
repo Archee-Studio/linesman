@@ -41,16 +41,62 @@ def regions(sheet: Sheet) -> list[Region]:
     geo = sheet.geometry
     boxes = [_box(e) for e in geo]
     keep = [i for i, b in enumerate(boxes) if b is not None]
-    drop, _ = _furniture(geo, boxes, keep)
+    drop, _, _ = _furniture(geo, boxes, keep)
     live = [i for i in keep if i not in drop]
-    found = [_region(sheet, geo, boxes, group) for group in _clusters(boxes, live)]
+    live = [i for i in live if i not in _leaders(sheet, geo, live)]
+    groups = _merge_inner(sheet, geo, boxes, _clusters(boxes, live))
+    found = [_region(sheet, geo, boxes, group) for group in groups]
     return sorted(found, key=lambda r: (-round(r.y1, 1), r.x0))
 
 
 def title_block(sheet: Sheet) -> Box | None:
     """The title block: a closed rectangle at the frame's lower-right corner, or None when the sheet has none."""
     boxes = [_box(e) for e in sheet.geometry]
+    return _furniture(sheet.geometry, boxes, [i for i, b in enumerate(boxes) if b is not None])[2]
+
+
+def frame(sheet: Sheet) -> Box | None:
+    """The sheet frame: the outermost closed rectangle spanning the geometry, or None when there is none."""
+    boxes = [_box(e) for e in sheet.geometry]
     return _furniture(sheet.geometry, boxes, [i for i, b in enumerate(boxes) if b is not None])[1]
+
+
+LEADER_SLACK = 8.0  # mm: a leader ends this close to the text it points at
+LEADER_MAX_SEGMENTS = 4
+ANNOTATION = ("DIM", "ANNOT", "LEADER", "TEXT", "NOTE")
+
+
+def _leaders(sheet: Sheet, geo, live: list[int]) -> set[int]:
+    """LINE chains from a text's edge to the view are annotation, not outline: a note's leader never sizes a view."""
+    if not sheet.texts:
+        return set()
+    lines = {
+        i
+        for i in live
+        if geo[i].dxftype() == "LINE" and any(w in geo[i].dxf.get("layer", "").upper() for w in ANNOTATION)
+    }
+    ends = {i: ((geo[i].dxf.start.x, geo[i].dxf.start.y), (geo[i].dxf.end.x, geo[i].dxf.end.y)) for i in lines}
+    at_text = {i for i, (a, b) in ends.items() if any(_near_text(a, t) or _near_text(b, t) for t in sheet.texts)}
+    dropped: set[int] = set()
+    for start in at_text:
+        chain = {start}
+        frontier = [start]
+        while frontier and len(chain) <= LEADER_MAX_SEGMENTS:
+            nxt = []
+            for i in frontier:
+                for j in lines - chain:
+                    if any(abs(p[0] - q[0]) <= TOL and abs(p[1] - q[1]) <= TOL for p in ends[i] for q in ends[j]):
+                        chain.add(j)
+                        nxt.append(j)
+            frontier = nxt
+        if len(chain) <= LEADER_MAX_SEGMENTS:
+            dropped |= chain
+    return dropped
+
+
+def _near_text(p, t, slack: float = LEADER_SLACK) -> bool:
+    box = t.box or (t.x, t.y, t.x, t.y)
+    return box[0] - slack <= p[0] <= box[2] + slack and box[1] - slack <= p[1] <= box[3] + slack
 
 
 def _box(e) -> Box | None:
@@ -81,20 +127,20 @@ def _area(b: Box) -> float:
     return (b[2] - b[0]) * (b[3] - b[1])
 
 
-def _furniture(geo, boxes: list[Box | None], keep: list[int]) -> tuple[set[int], Box | None]:
-    """Indices of the frame, an inner border, the title block and what it holds; and the title block box."""
+def _furniture(geo, boxes: list[Box | None], keep: list[int]) -> tuple[set[int], Box | None, Box | None]:
+    """Indices of the frame, an inner border, the title block and what it holds; frame box; title block box."""
     rects = _rectangles(geo, boxes, keep)  # (box, entity indices), largest first
     if not rects:
-        return set(), None
+        return set(), None, None
     total = _union([boxes[i] for i in keep])
     frame_box, frame_own = rects[0]
     if frame_box[2] - frame_box[0] < 0.95 * (total[2] - total[0]) or frame_box[3] - frame_box[1] < 0.95 * (
         total[3] - total[1]
     ):
-        return set(), None  # the largest rectangle does not span the geometry: there is no sheet frame
+        return set(), None, None  # the largest rectangle does not span the geometry: there is no sheet frame
     rest = [i for i in keep if i not in frame_own]
     if rest and sum(_inside(boxes[i], frame_box) for i in rest) < 0.8 * len(rest):
-        return set(), None
+        return set(), None, None
     drop = set(frame_own)
     title: tuple[Box, set[int]] | None = None
     for box, own in rects[1:]:
@@ -104,7 +150,7 @@ def _furniture(geo, boxes: list[Box | None], keep: list[int]) -> tuple[set[int],
             title = (box, own)
     if title:
         drop |= {i for i in rest if _inside(boxes[i], title[0])} | title[1]
-    return drop, title[0] if title else None
+    return drop, frame_box, title[0] if title else None
 
 
 def _corner(box: Box, frame: Box) -> bool:
@@ -191,6 +237,25 @@ def _clusters(boxes: list[Box | None], live: list[int]) -> list[list[int]]:
     for i in live:
         groups.setdefault(find(i), []).append(i)
     return list(groups.values())
+
+
+def _merge_inner(sheet: Sheet, geo, boxes, groups: list[list[int]]) -> list[list[int]]:
+    """Clusters fully inside another cluster's outline belong to it: an exploded polyline is four lines whose boxes
+    no longer span the view, so geometry inside it would otherwise split off as a second "view"."""
+    body = [
+        _union([boxes[i] for i in group if not _centre_line(sheet, geo[i])] or [boxes[i] for i in group])
+        for group in groups
+    ]
+    merged = list(range(len(groups)))
+    for a in range(len(groups)):
+        for b in range(len(groups)):
+            if a != b and _inside(body[a], body[b], tol=-0.1) and _area(body[b]) > _area(body[a]):
+                merged[a] = b
+                break
+    out: dict[int, list[int]] = {}
+    for i, group in enumerate(groups):
+        out.setdefault(merged[i], []).extend(group)
+    return list(out.values())
 
 
 def _centre_line(sheet: Sheet, e) -> bool:

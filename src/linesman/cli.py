@@ -1,14 +1,18 @@
-"""`linesman make`, `linesman grade`: compact output, non-interactive, exit 0 on success."""
+"""The linesman CLI: make, grade, build, report, calibrate, rules. Compact output, exit 0 on success."""
 
 import argparse
 import json
 import random
 from pathlib import Path
 
+from .build import build as build_split
 from .calibrate import run as run_calibration
 from .families import FAMILIES
 from .grade import grade_files
 from .mutate import Skip, seed_errors
+from .report import aggregate
+from .report import table as report_table
+from .rules import rules_text
 from .schema import Finding, Task
 
 REVIEW_REQUEST = (
@@ -47,13 +51,14 @@ def make_review(family: str, seeds: range, out: Path) -> list[Path]:
     return made
 
 
-def make(family: str, seeds: range, out: Path, layout: int) -> list[Path]:
+def make(family: str, seeds: range, out: Path, layout: int, level: str = "given") -> list[Path]:
     """Write calc-sheet task folders and the reference sheet of each as a submission."""
     fam = FAMILIES[family]
     made = []
     for seed in seeds:
-        inputs = fam.sample(seed)
-        task = Task(id=f"{family}-{seed:04d}", track="calc-sheet", family=family, seed=seed)
+        inputs = fam.sample(seed) if level == "given" else fam.calc(seed)
+        suffix = "-calc" if level == "calc" else ""
+        task = Task(id=f"{family}-{seed:04d}{suffix}", track="calc-sheet", family=family, seed=seed, level=level)
         folder = out / "tasks" / task.id
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "task.json").write_text(task.model_dump_json(indent=2))
@@ -82,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--seeds", type=int, default=5, help="seeds 0..N-1")
     m.add_argument("--track", choices=["calc-sheet", "review"], default="calc-sheet")
     m.add_argument("--layout", type=int, default=0, help="0 is the reference layout")
+    m.add_argument(
+        "--level", choices=["given", "calc"], default="given", help="calc tasks state requirements, not values"
+    )
     m.add_argument("--out", type=Path, default=Path("out"))
     g = sub.add_parser("grade", help="grade a submissions folder against a tasks folder")
     g.add_argument("tasks", type=Path)
@@ -91,7 +99,29 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--families", default="all", help="comma-separated families or 'all'")
     c.add_argument("--seeds", type=int, default=3, help="seeds 0..N-1 per family")
     c.add_argument("--out", type=Path, help="write the JSON report here")
+    b = sub.add_parser("build", help="write a dev or test split of the benchmark")
+    b.add_argument("--split", choices=["dev", "test"], required=True)
+    b.add_argument("--out", type=Path, required=True)
+    b.add_argument("--salt-file", type=Path, help="secret salt; required for --split test")
+    b.add_argument("--per-family", type=int, default=2, help="calc-sheet tasks per family and level")
+    r = sub.add_parser("report", help="aggregate results files into the spec metrics")
+    r.add_argument("results", type=Path, nargs="+")
+    r.add_argument("--out", type=Path, help="write the JSON report here")
+    sub.add_parser("rules", help="print RULES.md: the spec's sheet rules for entrants")
     args = parser.parse_args(argv)
+    if args.command == "rules":
+        print(rules_text(), end="")
+        return 0
+    if args.command == "build":
+        manifest = build_split(args.split, args.out, args.salt_file, args.per_family)
+        print(f"built {len(manifest['tasks'])} {args.split} tasks in {args.out}; freeze {manifest['freeze'][:12]}")
+        return 0
+    if args.command == "report":
+        report = aggregate(args.results)
+        print(report_table(report))
+        if args.out:
+            args.out.write_text(__import__("json").dumps(report, indent=2))
+        return 0
     if args.command == "calibrate":
         names = sorted(FAMILIES) if args.families == "all" else args.families.split(",")
         unknown = [n for n in names if n not in FAMILIES]
@@ -102,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.track == "review":
             made = make_review(args.family, range(args.seeds), args.out)
         else:
-            made = make(args.family, range(args.seeds), args.out, args.layout)
+            made = make(args.family, range(args.seeds), args.out, args.layout, args.level)
         print(f"made {len(made)} tasks in {args.out / 'tasks'}; reference sheets in {args.out / 'reference'}")
         return 0
     rows = grade_all(args.tasks, args.submissions)

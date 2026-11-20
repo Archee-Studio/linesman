@@ -133,8 +133,9 @@ def test_plate_regions_hold_holes_and_hidden_lines_with_their_view():
     found = regions(parse(PLATE.draw(inputs)))
     assert len(found) == 2
     front, top = found
-    assert (front.width, front.height) == (inputs["width"], inputs["height"])
-    assert len(front.entities) == 6 and len(top.entities) == 3
+    factor = {"1:1": 1.0, "1:2": 0.5, "2:1": 2.0}[PLATE.truth(inputs).scale]
+    assert (front.width, front.height) == (inputs["width"] * factor, inputs["height"] * factor)
+    assert len(front.entities) == 16 and len(top.entities) == 3
 
 
 def test_sheet_without_frame_keeps_every_view():
@@ -166,3 +167,38 @@ def test_centre_lines_on_a_center_layer_drawn_continuous_do_not_grow_the_view():
 
     (region,) = regions(parse(doc))
     assert (round(region.width, 3), round(region.height, 3)) == (85.0, 45.0)
+
+
+def test_section_drawn_as_two_hatched_walls_still_matches():
+    """No far-edge lines across the bore: the two hatched walls are one section view (a style real submissions use)."""
+    from linesman.calibrate import fair_variant
+
+    fam = FAMILIES["bushing"]
+    inputs = fam.sample(0)
+    doc = fair_variant("split-section", fam.draw(inputs, 0), fam.truth(inputs))
+    s = parse(doc)
+    got = {
+        r.id: r.score
+        for r in views(s, Task(id="t", track="calc-sheet", family="bushing", seed=0, level="given"), fam.truth(inputs))
+    }
+    assert got["views.present"] == 1.0
+    assert got["views.section"] == 1.0
+
+
+def test_leader_line_to_a_note_does_not_grow_the_view():
+    s = sheet()
+    msp = s.doc.modelspace()
+    msp.add_line((120, 100), (250, 130), dxfattribs={"layer": "dim"})  # leader to the note
+    msp.add_line((250, 130), (260, 130), dxfattribs={"layer": "dim"})
+    msp.add_text("4 HOLES", height=2.5, dxfattribs={"insert": (262, 128)})
+    s = parse(s.doc)
+    assert [r.width for r in regions(s)] == [W, W]
+
+
+def test_line_on_outline_layer_near_a_note_still_counts():
+    s = sheet()
+    msp = s.doc.modelspace()
+    msp.add_line((120, 100), (250, 130))  # continuous outline-layer line: not annotation
+    msp.add_text("4 HOLES", height=2.5, dxfattribs={"insert": (262, 128)})
+    s = parse(s.doc)
+    assert max(r.width for r in regions(s)) > W

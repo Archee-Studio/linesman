@@ -12,10 +12,10 @@ from linesman.schema import Dim, Task, Truth, View
 from linesman.sheet import Dimension, Sheet, parse
 
 PLATE = FAMILIES["plate"]
-INPUTS = PLATE.sample(7)
+INPUTS = PLATE.sample(8)  # 1:1, so drawn measurements equal the truth values
 TRUTH = PLATE.truth(INPUTS)
-TASK = Task(id="t", track="calc-sheet", family="plate", seed=7)
-CHECK_IDS = ("dims.recall", "dims.precision", "fits.shown", "titleblock.fields")
+TASK = Task(id="t", track="calc-sheet", family="plate", seed=8)
+CHECK_IDS = ("dims.recall", "dims.precision", "dims.true", "dims.attached", "fits.shown", "titleblock.fields")
 
 
 def scores(sheet: Sheet, truth: Truth = TRUTH) -> dict[str, float]:
@@ -35,7 +35,7 @@ def dimension_entities(doc):
 
 
 def dim(text: str = "", value: float = 40.0, kind: str = "diameter") -> Dimension:
-    return Dimension(kind, value, text, 0.0, 0.0, "1")
+    return Dimension(kind, value, text, 0.0, 0.0, "1", measured=value, raw=value)
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3, 7, 11])
@@ -53,7 +53,7 @@ def test_wrong_value_fails_recall_not_fits_or_title():
     )
     width.dxf.text = f"{INPUTS['width'] + 5:g}"
     sheet = parse(doc)
-    assert failing(sheet) == {"dims.recall", "dims.precision"}
+    assert failing(sheet) == {"dims.recall", "dims.precision", "dims.true"}
     assert any("width" in line for line in dims(sheet, TASK, TRUTH)[0].detail)
     assert scores(sheet)["fits.shown"] == 1.0 and scores(sheet)["titleblock.fields"] == 1.0
 
@@ -124,7 +124,8 @@ def test_one_sheet_dimension_cannot_satisfy_two_required_dimensions():
     sheet = Sheet(ezdxf.new(), dims=[dim(kind="linear", value=50.0)])
     assert dims(sheet, TASK, truth)[0].score == 0.5
     sheet.dims.append(dim(kind="linear", value=50.004))
-    assert [r.score for r in dims(sheet, TASK, truth)] == [1.0, 1.0]
+    results = {r.id: r.score for r in dims(sheet, TASK, truth)}
+    assert results["dims.recall"] == 1.0 and results["dims.precision"] == 1.0
 
 
 def test_kind_must_agree_and_a_diameter_mark_makes_a_linear_dimension_a_diameter():
@@ -144,7 +145,7 @@ def test_angular_values_use_the_degree_tolerance():
 
 def test_empty_sheet_scores_zero_and_unrequired_checks_score_nothing():
     empty = Sheet(ezdxf.new())
-    assert scores(empty) == {"dims.recall": 0.0, "dims.precision": 0.0, "fits.shown": 0.0, "titleblock.fields": 0.0}
+    assert scores(empty) == {check_id: 0.0 for check_id in CHECK_IDS}
     bare = Truth(views=(), dims=())
     assert scores(empty, bare) == {}  # a check that does not apply returns nothing, never a free 1.0
 
@@ -197,7 +198,8 @@ def test_fit_credit_goes_to_the_dimension_that_shows_it():
         ),
     )
     sheet = Sheet(ezdxf.new(), dims=[dim("", 40.0), dim("<>H7", 40.0)])
-    assert [r.score for r in dims(sheet, TASK, truth)] == [1.0, 1.0]
+    results = {r.id: r.score for r in dims(sheet, TASK, truth)}
+    assert results["dims.recall"] == 1.0 and results["dims.precision"] == 1.0
     assert fits(sheet, TASK, truth)[0].score == 1.0
     assert fits(Sheet(ezdxf.new(), dims=[dim("", 40.0), dim("", 40.0)]), TASK, truth)[0].score == 0.0
 

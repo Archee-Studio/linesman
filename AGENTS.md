@@ -17,10 +17,16 @@ uv run linesman calibrate --families all --seeds 5 # every check proven on every
 | --- | --- |
 | `src/linesman/sheet.py` | The gate and the parsed sheet. Only `sheet.load` opens a submitted file. |
 | `src/linesman/checks/` | One module per part; `CHECKS` is the registry. |
+| `src/linesman/checks/drafting.py` | Sheet hygiene: on-sheet, text size, clearance and linetype checks. |
+| `src/linesman/geo.py` | Shared geometry: point-to-entity distance, linetype classes, text boxes. |
 | `src/linesman/families/` | Parametric part families; `FAMILIES` is the registry. |
 | `src/linesman/mutate.py` | Seeded defects; `MUTANTS` is the registry. |
 | `src/linesman/calibrate.py` | The proof that every check passes good sheets and fails its defect. |
+| `src/linesman/build.py`, `report.py`, `rules.py` | `linesman build|report|rules`: splits with canary and freeze hash, the metrics board, the entrant rules text. |
+| `runner/` | The harness: prompt.txt, Dockerfile, run.sh — see docs/protocol.md. |
+| `docs/` | spec.md, protocol.md and the Hugging Face dataset card. |
 | `src/linesman/iso286.py` | ISO 286-1 limit deviations. |
+| `src/linesman/iso273.py`, `src/linesman/din471.py`, `src/linesman/families/keys.py` | ISO 273 clearance holes, DIN 471 grooves, DIN 6885 keys — the tables calc level resolves against. |
 
 ## Rules
 
@@ -33,3 +39,4 @@ uv run linesman calibrate --families all --seeds 5 # every check proven on every
 - Changing scoring or a record raises the version: the package in `pyproject.toml`, the schema in `linesman.schema.SPEC_VERSION` and the spec title.
 - Comments are short and say why. Files stay under 20,000 bytes.
 - Never edit `assets/` by hand: regenerate it.
+- The package publishes to PyPI (`linesman-bench`) and the dev split to Hugging Face by the monorepo's manual release workflow; the test split is never uploaded.

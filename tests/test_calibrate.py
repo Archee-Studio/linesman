@@ -23,7 +23,7 @@ def test_plate_calibration_with_the_checks_on_dev():
 
 
 def test_plate_calibration_passes_with_the_registered_checks():
-    report = cal.calibrate(["plate"], 3)
+    report = cal.calibrate(["plate", "gear-blank", "bracket"], 3)
     assert report["ok"], report["failures"]
     applied = {n for n, m in report["mutants"].items() if m["applied"]}
     assert set(MUTANTS) <= applied
